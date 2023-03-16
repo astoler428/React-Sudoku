@@ -304,3 +304,5 @@ export default App;
 
 //I think I way overcomplicated last move
 //I could've copied the entire state of the board and then just did set board...
+
+//im in trial
