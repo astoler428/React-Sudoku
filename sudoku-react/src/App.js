@@ -6,26 +6,26 @@ import React from "react";
 import ReactSwitch from "react-switch";
 import Confetti from "react-confetti";
 
-//objects that have value, fixed property, previouslyChanged to stay focused...
+//initialBoard doesn't need to be state bc it doesn't cause a rerender. It needs to udpate on a new game...
+//however it appears some other variables depend on it
 
-//idea: initialBoard, board, solutionBoard
 function App() {
-  const [initialBoard, setInitialBoard] = useState();
-  const [board, setBoard] = useState();
-  const [gameOn, setGameOn] = useState(false);
+  const [initialBoard, setInitialBoard] = useState(); //this is the original state board in object form, stored for resetting upon clear
+  const [board, setBoard] = useState(); //this is the current updating board in obj form
+  const [gameOn, setGameOn] = useState(false); //game has started - board has been created
   const [win, setWin] = useState(false);
-  const [mode, setMode] = useState("Easy");
-  const [difficulty, setDifficulty] = useState(40);
-  const [notesSetting, setNotesSetting] = useState(false);
+  const [mode, setMode] = useState("Easy"); //for toggling between coloring correct answers and not
+  const [difficulty, setDifficulty] = useState(40); //user can select how many starting cells
+  const [notesSetting, setNotesSetting] = useState(false); //toggle between inputting notes and not
 
-  const undoMoves = useRef([]);
+  const undoMoves = useRef([]); //array containing the state of each cell before it was changed
 
-  //solutionBoard only changes if a new game is made
+  //solutionBoard only changes if a new game is made, hence it only listens for the initalBoard to change
   const solutionBoard = useMemo(() => {
     if (gameOn) return solveBoard();
   }, [initialBoard]);
-  //perhaps make it a useRef and then update it in the start game function...
 
+  //every time the board changes, check for win
   useEffect(() => {
     if (!gameOn) return;
 
@@ -35,6 +35,7 @@ function App() {
     }
   }, [board]);
 
+  //compares each cell's value with the solutionBoard
   function checkWin() {
     for (let i = 0; i < 9; i++)
       for (let j = 0; j < 9; j++)
@@ -43,13 +44,14 @@ function App() {
     return true;
   }
 
+  //this gets called when create new board button is pressed
+  //resets everything to default values
   function startGame() {
     setGameOn(true);
     setWin(false);
     setMode("Easy");
     setNotesSetting(false);
     undoMoves.current = [];
-    //somehow get randomBoard before i trim it and store int a value... use memo?
     let randomBoard = createRandomBoard();
     trimBoard(randomBoard, difficulty);
 
@@ -70,19 +72,21 @@ function App() {
   function cellChanged(event) {
     //check that event.target.vale is a whole number 1 to 9
     let enteredValue = event.target.value;
+    if (enteredValue !== "")
+      enteredValue = enteredValue[enteredValue.length - 1]; //get the most recent digit
 
-    if (enteredValue === "0" || isNaN(enteredValue) || enteredValue.length > 1)
-      return;
+    if (enteredValue === "0" || isNaN(enteredValue)) return;
 
     let cellNum = event.target.id;
     let row = Math.floor(cellNum / 9);
     let col = cellNum % 9;
 
-    if (!notesSetting) {
-      //holds objects with the row, col and previous board value before the change
-      //only allow undo on actual moves, not notes added or created
-      undoMoves.current.push({ row, col, value: board[row][col].value });
-    }
+    //holds objects with the row, col and previous board value before the change
+    undoMoves.current.push({
+      row,
+      col,
+      prevPlacement: board[row][col],
+    });
 
     //nothing entered is "" and then converting it to a number gives 0.
     adjustBoard(row, col, Number(enteredValue));
@@ -103,6 +107,7 @@ function App() {
           for (let j = 0; j < 9; j++)
             newBoard[i][j] = {
               ...prevBoard[i][j],
+              noteValues: new Set([...prevBoard[i][j].noteValues]),
               previouslyChanged: i === row && j === col,
               highlighted:
                 focusedValue !== 0 && prevBoard[i][j].value === focusedValue,
@@ -118,12 +123,15 @@ function App() {
     //if value entered and value !== 0, remove all notes
     //if value !== 0 and a note entered, set value to 0
 
+    console.log(enteredValue);
     //i dont think i have the case of if delete is pressed, all notes disappear
     let noteValue;
     if (notesSetting) {
       noteValue = enteredValue;
       enteredValue = 0;
     }
+
+    //value to note and return back to value
 
     setBoard((prevBoard) => {
       let newBoard = [[], [], [], [], [], [], [], [], []];
@@ -133,13 +141,14 @@ function App() {
             newBoard[i][j] = {
               ...prevBoard[i][j],
               value: enteredValue,
+              noteValues: new Set([...prevBoard[i][j].noteValues]),
               previouslyChanged: true,
               correctLocation:
                 enteredValue === 0 || enteredValue === solutionBoard[i][j],
               highlighted: enteredValue !== 0,
             };
             //try to delete if already there, otherwise add
-            if (notesSetting)
+            if (notesSetting && noteValue !== 0)
               !newBoard[i][j].noteValues.delete(noteValue) &&
                 newBoard[i][j].noteValues.add(noteValue);
             else newBoard[i][j].noteValues.clear();
@@ -158,17 +167,46 @@ function App() {
   function undoLastMove() {
     if (undoMoves.current.length === 0) return;
     let lastMove = undoMoves.current.pop();
-    adjustBoard(lastMove.row, lastMove.col, lastMove.value);
+
+    undoMove(lastMove.row, lastMove.col, lastMove.prevPlacement);
   }
+
+  function undoMove(row, col, obj) {
+    //if oldNoteValues has stuff - reseting to that
+    //otherwise, old value
+    let returningToANote = obj.noteValues.size !== 0;
+
+    setBoard((prevBoard) => {
+      let newBoard = [[], [], [], [], [], [], [], [], []];
+      for (let i = 0; i < 9; i++)
+        for (let j = 0; j < 9; j++)
+          if (i === row && j === col)
+            newBoard[i][j] = {
+              ...obj,
+              previouslyChanged: true,
+            };
+          else
+            newBoard[i][j] = {
+              ...prevBoard[i][j],
+              previouslyChanged: false,
+              highlighted:
+                !returningToANote &&
+                prevBoard[i][j].value === obj.value &&
+                obj.value !== 0,
+            };
+      return newBoard;
+    });
+  }
+  //what the heck - for some reason it's not displaying
 
   function clearBoard() {
     undoMoves.current = [];
     setBoard(initialBoard);
   }
 
+  //initialize empty board - copy initalBoard's value contents (not object) into it and call sudoku solver
   function solveBoard() {
     let boardToSolve = [];
-    //initialize empty board - copy boards value contents (not object) into it
     for (let i = 0; i < 9; i++) {
       boardToSolve.push([]);
       for (let j = 0; j < 9; j++)
@@ -179,10 +217,9 @@ function App() {
     return boardToSolve;
   }
 
+  //to not allow further changes - setBoard to the solutionBoard by converting it to objects (everything fixed)
   function endGame() {
     setGameOn(false);
-
-    //if win - confetti!!!
 
     let solutionBoardDisplay = solutionBoard.map((row) =>
       row.map((value) => ({
@@ -269,6 +306,5 @@ function App() {
 }
 export default App;
 
-//feature - note taking - when cell is highlighted - display a button for add note - and input in small text in corner
-//position relative, absolute, fixed?
-//onFocus listener
+//last thing is to allow undo with notes
+//im off by one with what I'm pushing into the undo - it's the last state, so it doesn't matter if I'm settign a note or value

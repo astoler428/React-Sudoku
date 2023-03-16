@@ -12,20 +12,35 @@ export default function Board(props) {
         color: color,
         background: obj.highlighted ? "	rgb(211,211,211)" : "",
       };
+      let notes = [];
+      obj.noteValues.forEach((noteValue) => {
+        // console.log(noteValue);
+        let noteClasses = "note-label n";
+        noteClasses += String(noteValue);
+        notes.push(
+          <label key={Math.random()} className={noteClasses}>
+            {noteValue}
+          </label>
+        );
+      });
 
       return (
-        <input
-          value={obj.value === 0 ? "" : obj.value}
-          id={cellId++}
-          className={classes}
-          onChange={props.handleChange}
-          onFocus={props.handleFocus}
-          readOnly={obj.fixed}
-          // onFocus={(e) => obj.fixed && e.target.blur()}
-          autoFocus={obj.previouslyChanged}
-          style={styles}
-          autoComplete="off"
-        ></input>
+        <div key={Math.random()} className="cell-holder">
+          {notes}
+          <input
+            //the " " space is critical as it makes a blank cell trigger onChange because " " !== ""
+            value={obj.value === 0 ? " " : obj.value}
+            id={cellId++}
+            className={classes}
+            onChange={props.handleChange}
+            onFocus={props.handleFocus}
+            readOnly={obj.fixed}
+            // onFocus={(e) => obj.fixed && e.target.blur()}
+            autoFocus={obj.previouslyChanged}
+            style={styles}
+            autoComplete="off"
+          ></input>
+        </div>
       );
     })
   );
