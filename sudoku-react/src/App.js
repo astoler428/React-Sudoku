@@ -81,12 +81,8 @@ function App() {
     let row = Math.floor(cellNum / 9);
     let col = cellNum % 9;
 
-    //holds objects with the row, col and previous obj
-    undoMoves.current.push({
-      row,
-      col,
-      prevPlacement: board[row][col],
-    });
+    //add the current state of the board before it changes
+    undoMoves.current.push(board);
 
     adjustBoard(row, col, Number(enteredValue)); // note that a value of "" gets converted to 0 by Number()
   }
@@ -160,38 +156,14 @@ function App() {
     });
   }
 
+  //sets it back to last boardState
   function undoLastMove() {
     //does nothing if not more undo's in list
 
     if (undoMoves.current.length === 0) return;
-    let lastMove = undoMoves.current.pop();
+    let lastBoardState = undoMoves.current.pop();
 
-    let row = lastMove.row;
-    let col = lastMove.col;
-    let obj = lastMove.prevPlacement;
-
-    let returningToANote = obj.noteValues.size !== 0; //if the last state has notes, then we are returning to that
-
-    setBoard((prevBoard) => {
-      let newBoard = [[], [], [], [], [], [], [], [], []];
-      for (let i = 0; i < 9; i++)
-        for (let j = 0; j < 9; j++)
-          if (i === row && j === col)
-            newBoard[i][j] = {
-              ...obj, //copy everything from last state
-              //don't think i need prevouslyChanged: true since it will be by default
-            };
-          else
-            newBoard[i][j] = {
-              ...prevBoard[i][j],
-              previouslyChanged: false,
-              highlighted:
-                !returningToANote &&
-                prevBoard[i][j].value === obj.value &&
-                obj.value !== 0,
-            };
-      return newBoard;
-    });
+    setBoard(lastBoardState);
   }
 
   //reset
