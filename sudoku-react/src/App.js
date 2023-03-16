@@ -69,31 +69,32 @@ function App() {
     setBoard(randomBoard);
   }
 
+  //event listener for input field onChange
   function cellChanged(event) {
-    //check that event.target.vale is a whole number 1 to 9
-    let enteredValue = event.target.value;
+    let enteredValue = event.target.value; //comes in as a string
     if (enteredValue !== "")
-      enteredValue = enteredValue[enteredValue.length - 1]; //get the most recent digit
+      enteredValue = enteredValue[enteredValue.length - 1]; //get the most recent digit if there is more than one digit
 
     if (enteredValue === "0" || isNaN(enteredValue)) return;
 
-    let cellNum = event.target.id;
+    let cellNum = event.target.id; //each cell in Board component has an id 0 to 80, which gets converted to a row and col
     let row = Math.floor(cellNum / 9);
     let col = cellNum % 9;
 
-    //holds objects with the row, col and previous board value before the change
+    //holds objects with the row, col and previous obj
     undoMoves.current.push({
       row,
       col,
       prevPlacement: board[row][col],
     });
 
-    //nothing entered is "" and then converting it to a number gives 0.
-    adjustBoard(row, col, Number(enteredValue));
+    adjustBoard(row, col, Number(enteredValue)); // note that a value of "" gets converted to 0 by Number()
   }
 
+  //EventListener for input onFocus
   //just like cellChanged, but only focus is set
   //need to check that it's not the previous focus or it goes into infinite loop on having focusing and changing state
+  //used for determining what to highlight
   function cellFocused(event) {
     let cellNum = event.target.id;
     let row = Math.floor(cellNum / 9);
@@ -101,13 +102,14 @@ function App() {
     let focusedValue = board[row][col].value;
 
     if (!board[row][col].previouslyChanged) {
+      //otherwise infinite loop since whatever I'm setting to focus will call this again
       setBoard((prevBoard) => {
         let newBoard = [[], [], [], [], [], [], [], [], []];
         for (let i = 0; i < 9; i++)
           for (let j = 0; j < 9; j++)
             newBoard[i][j] = {
               ...prevBoard[i][j],
-              noteValues: new Set([...prevBoard[i][j].noteValues]),
+              noteValues: new Set([...prevBoard[i][j].noteValues]), //felt like there was a glitch with pointers and needed to re copy the entire set
               previouslyChanged: i === row && j === col,
               highlighted:
                 focusedValue !== 0 && prevBoard[i][j].value === focusedValue,
@@ -116,22 +118,16 @@ function App() {
         return newBoard;
       });
     }
-    // adjustBoard(row, col, Number(event.target.value));
   }
 
+  //this gets called by cellChanged and does the work to change the board
   function adjustBoard(row, col, enteredValue) {
-    //if value entered and value !== 0, remove all notes
-    //if value !== 0 and a note entered, set value to 0
-
-    console.log(enteredValue);
-    //i dont think i have the case of if delete is pressed, all notes disappear
     let noteValue;
     if (notesSetting) {
+      //this puts the value in the noteValue variable and sets the value to 0
       noteValue = enteredValue;
       enteredValue = 0;
     }
-
-    //value to note and return back to value
 
     setBoard((prevBoard) => {
       let newBoard = [[], [], [], [], [], [], [], [], []];
@@ -140,24 +136,24 @@ function App() {
           if (i === row && j === col) {
             newBoard[i][j] = {
               ...prevBoard[i][j],
-              value: enteredValue,
-              noteValues: new Set([...prevBoard[i][j].noteValues]),
+              value: enteredValue, //was set to 0 above if in note setting
+              noteValues: new Set([...prevBoard[i][j].noteValues]), //same as before, but will add or remove currentnoteValue below
               previouslyChanged: true,
               correctLocation:
                 enteredValue === 0 || enteredValue === solutionBoard[i][j],
-              highlighted: enteredValue !== 0,
+              highlighted: enteredValue !== 0, //if not a notevalue, then definitely highlight because it's the one with focus
             };
-            //try to delete if already there, otherwise add
+            //this is where noteValues are updated, by trying to delete if already there or adding if not
             if (notesSetting && noteValue !== 0)
               !newBoard[i][j].noteValues.delete(noteValue) &&
                 newBoard[i][j].noteValues.add(noteValue);
-            else newBoard[i][j].noteValues.clear();
+            else newBoard[i][j].noteValues.clear(); //if not in noteSetting, then all notes clear
           } else
             newBoard[i][j] = {
               ...prevBoard[i][j],
               previouslyChanged: false,
               highlighted:
-                prevBoard[i][j].value === enteredValue && enteredValue !== 0,
+                prevBoard[i][j].value === enteredValue && enteredValue !== 0, //highlights if it matches the entered value
             };
 
       return newBoard;
@@ -165,16 +161,16 @@ function App() {
   }
 
   function undoLastMove() {
+    //does nothing if not more undo's in list
+
     if (undoMoves.current.length === 0) return;
     let lastMove = undoMoves.current.pop();
 
-    undoMove(lastMove.row, lastMove.col, lastMove.prevPlacement);
-  }
+    let row = lastMove.row;
+    let col = lastMove.col;
+    let obj = lastMove.prevPlacement;
 
-  function undoMove(row, col, obj) {
-    //if oldNoteValues has stuff - reseting to that
-    //otherwise, old value
-    let returningToANote = obj.noteValues.size !== 0;
+    let returningToANote = obj.noteValues.size !== 0; //if the last state has notes, then we are returning to that
 
     setBoard((prevBoard) => {
       let newBoard = [[], [], [], [], [], [], [], [], []];
@@ -182,8 +178,8 @@ function App() {
         for (let j = 0; j < 9; j++)
           if (i === row && j === col)
             newBoard[i][j] = {
-              ...obj,
-              previouslyChanged: true,
+              ...obj, //copy everything from last state
+              //don't think i need prevouslyChanged: true since it will be by default
             };
           else
             newBoard[i][j] = {
@@ -197,8 +193,8 @@ function App() {
       return newBoard;
     });
   }
-  //what the heck - for some reason it's not displaying
 
+  //reset
   function clearBoard() {
     undoMoves.current = [];
     setBoard(initialBoard);
@@ -306,5 +302,5 @@ function App() {
 }
 export default App;
 
-//last thing is to allow undo with notes
-//im off by one with what I'm pushing into the undo - it's the last state, so it doesn't matter if I'm settign a note or value
+//I think I way overcomplicated last move
+//I could've copied the entire state of the board and then just did set board...
