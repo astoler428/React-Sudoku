@@ -1,4 +1,10 @@
-One of my proudest projects. I built the entire project from scratch
+One of my proudest projects. Complex React project that includes using backtracking algorithms I wrote to solve and create random sudoku boards.
+The final app is a fully functioning front-end sudoku game with every feature of sudoku:
+-customize the difficulty based on the number of empty cells to start
+-choose between easy mode (incorrect placements are shown) and hard mode
+-highlights all cells of the value in focus
+-Note taking option
+-Undo Moves and Clear
+-Clean CSS for a user-friendly experience
 
--sudoku.js: All the algorithms related to sudoku building and solving
--App.css: Styling is not my strength, but I put a lot of work into...
+Deployed at: https://ari-sudoku.netlify.app/

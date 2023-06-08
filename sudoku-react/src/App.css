@@ -14,7 +14,6 @@
   position: relative;
   width: 50px;
   height: 50px;
-  /* border: 3px solid green; */
 }
 
 .note-label {
@@ -62,8 +61,6 @@
   left: 75%;
   top: 65%;
 }
-/* left: 10%, 40%, 80% */
-/* top: 5%, 35%, 65% */
 
 .cell {
   display: flex;
@@ -162,10 +159,6 @@ button:active {
   font-size: 20px;
   font-weight: bold;
 }
-
-/* .slider-container {
-  border: 2px solid black;
-} */
 
 .flex-container {
   display: flex;
