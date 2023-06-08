@@ -1,31 +1,33 @@
 import "./App.css";
 import { sudokuSolver, createRandomBoard, trimBoard } from "./sudoku";
+import Settings from "./Settings";
 import Board from "./Board";
+import Tools from "./Tools";
 import { useState, useEffect, useMemo, useRef } from "react";
 import React from "react";
-import ReactSwitch from "react-switch";
 import Confetti from "react-confetti";
 
 //initialBoard doesn't need to be state bc it doesn't cause a rerender. It needs to udpate on a new game...
 //however it appears some other variables depend on it
 
 function App() {
-  const [initialBoard, setInitialBoard] = useState(); //this is the original state board in object form, stored for resetting upon clear
+  const [initialBoard, setInitialBoard] = useState(); //this is the original state board in object form, stored for resetting upon clear, this gets set upon creation of the board
   const [board, setBoard] = useState(); //this is the current updating board in obj form
   const [gameOn, setGameOn] = useState(false); //game has started - board has been created
-  const [win, setWin] = useState(false);
+  const [win, setWin] = useState(false); //whether you have won or not
   const [mode, setMode] = useState("Easy"); //for toggling between coloring correct answers and not
   const [difficulty, setDifficulty] = useState(40); //user can select how many starting cells
   const [notesSetting, setNotesSetting] = useState(false); //toggle between inputting notes and not
 
-  const undoMoves = useRef([]); //array containing the state of each cell before it was changed
+  //array containing the state of the board before each change
+  const undoMoves = useRef([]);
 
   //solutionBoard only changes if a new game is made, hence it only listens for the initalBoard to change
   const solutionBoard = useMemo(() => {
     if (gameOn) return solveBoard();
   }, [initialBoard]);
 
-  //every time the board changes, check for win
+  //check for win every time board changes
   useEffect(() => {
     if (!gameOn) return;
 
@@ -44,21 +46,24 @@ function App() {
     return true;
   }
 
-  //this gets called when create new board button is pressed
-  //resets everything to default values
+  //event handler when create new board button is pressed
   function startGame() {
+    //reset everything to default values
     setGameOn(true);
     setWin(false);
     setMode("Easy");
     setNotesSetting(false);
     undoMoves.current = [];
+
+    //create randomBoard and trim using sudoku.js algorithms
     let randomBoard = createRandomBoard();
     trimBoard(randomBoard, difficulty);
 
+    //turn the sudoku board of values into objects
     randomBoard = randomBoard.map((row) =>
       row.map((value) => ({
         value,
-        noteValues: new Set(),
+        noteValues: new Set(), //set not array bc can't repeat
         fixed: value !== 0,
         previouslyChanged: false,
         correctLocation: true,
@@ -72,33 +77,84 @@ function App() {
   //event listener for input field onChange
   function cellChanged(event) {
     let enteredValue = event.target.value; //comes in as a string
-    if (enteredValue !== "")
-      enteredValue = enteredValue[enteredValue.length - 1]; //get the most recent digit if there is more than one digit
 
+    //if it's not empty, only get the last digit
+    if (enteredValue !== "")
+      enteredValue = enteredValue[enteredValue.length - 1];
+
+    //only allow 1 - 9
     if (enteredValue === "0" || isNaN(enteredValue)) return;
 
-    let cellNum = event.target.id; //each cell in Board component has an id 0 to 80, which gets converted to a row and col
+    //each cell in Board component has an id 0 to 80, which gets converted to a row and col
+    let cellNum = event.target.id;
     let row = Math.floor(cellNum / 9);
     let col = cellNum % 9;
 
     //add the current state of the board before it changes
     undoMoves.current.push(board);
 
-    adjustBoard(row, col, Number(enteredValue)); // note that a value of "" gets converted to 0 by Number()
+    // send the cell and value that was changed
+    //note that a value of "" gets converted to 0 by Number()
+    adjustBoard(row, col, Number(enteredValue));
   }
 
-  //EventListener for input onFocus
-  //just like cellChanged, but only focus is set
-  //need to check that it's not the previous focus or it goes into infinite loop on having focusing and changing state
+  //this gets called by cellChanged and does the work to change the board
+  function adjustBoard(row, col, enteredValue) {
+    //determine if enteredValue should be for a note or the cell
+    let noteValue;
+    if (notesSetting) {
+      noteValue = enteredValue;
+      enteredValue = 0;
+    }
+
+    //if in notes, noteValue is the enteredValue and enteredValue is set to 0
+    //otherwise noteValue is undefined
+
+    setBoard((prevBoard) => {
+      let newBoard = [[], [], [], [], [], [], [], [], []];
+      for (let i = 0; i < 9; i++)
+        for (let j = 0; j < 9; j++)
+          //for the cell that was changed:
+          if (i === row && j === col) {
+            newBoard[i][j] = {
+              ...prevBoard[i][j],
+              value: enteredValue, //was set to 0 above if in note setting
+              noteValues: new Set([...prevBoard[i][j].noteValues]), //same as before, but will add or remove currentnoteValue below
+              previouslyChanged: true,
+              correctLocation:
+                enteredValue === 0 || enteredValue === solutionBoard[i][j],
+              highlighted: enteredValue !== 0, //if not a notevalue, then definitely highlight because it's the one with focus
+            };
+            //this is where noteValues are updated, by trying to delete if already there or adding if not
+            if (notesSetting && noteValue !== 0)
+              //tries to delete it first. If false, that means it wasn't there to delete, so add
+              !newBoard[i][j].noteValues.delete(noteValue) &&
+                newBoard[i][j].noteValues.add(noteValue);
+            else newBoard[i][j].noteValues.clear(); //if not in noteSetting, then all notes clear
+          } else
+            newBoard[i][j] = {
+              ...prevBoard[i][j],
+              previouslyChanged: false,
+              highlighted:
+                prevBoard[i][j].value === enteredValue && enteredValue !== 0, //highlights if it matches the entered value. If in note setting, it won't do anything because enteredValue == 0
+            };
+
+      return newBoard;
+    });
+  }
+
+  //EventListener for input onFocus event
   //used for determining what to highlight
   function cellFocused(event) {
     let cellNum = event.target.id;
     let row = Math.floor(cellNum / 9);
     let col = cellNum % 9;
+
+    //this is the value that I will check all cells with to determine if they should be highlighted
     let focusedValue = board[row][col].value;
 
+    //make sure it's not the previous focus or it goes into an infinte loop since state will change and it will trigger refocus
     if (!board[row][col].previouslyChanged) {
-      //otherwise infinite loop since whatever I'm setting to focus will call this again
       setBoard((prevBoard) => {
         let newBoard = [[], [], [], [], [], [], [], [], []];
         for (let i = 0; i < 9; i++)
@@ -116,62 +172,6 @@ function App() {
     }
   }
 
-  //this gets called by cellChanged and does the work to change the board
-  function adjustBoard(row, col, enteredValue) {
-    let noteValue;
-    if (notesSetting) {
-      //this puts the value in the noteValue variable and sets the value to 0
-      noteValue = enteredValue;
-      enteredValue = 0;
-    }
-
-    setBoard((prevBoard) => {
-      let newBoard = [[], [], [], [], [], [], [], [], []];
-      for (let i = 0; i < 9; i++)
-        for (let j = 0; j < 9; j++)
-          if (i === row && j === col) {
-            newBoard[i][j] = {
-              ...prevBoard[i][j],
-              value: enteredValue, //was set to 0 above if in note setting
-              noteValues: new Set([...prevBoard[i][j].noteValues]), //same as before, but will add or remove currentnoteValue below
-              previouslyChanged: true,
-              correctLocation:
-                enteredValue === 0 || enteredValue === solutionBoard[i][j],
-              highlighted: enteredValue !== 0, //if not a notevalue, then definitely highlight because it's the one with focus
-            };
-            //this is where noteValues are updated, by trying to delete if already there or adding if not
-            if (notesSetting && noteValue !== 0)
-              !newBoard[i][j].noteValues.delete(noteValue) &&
-                newBoard[i][j].noteValues.add(noteValue);
-            else newBoard[i][j].noteValues.clear(); //if not in noteSetting, then all notes clear
-          } else
-            newBoard[i][j] = {
-              ...prevBoard[i][j],
-              previouslyChanged: false,
-              highlighted:
-                prevBoard[i][j].value === enteredValue && enteredValue !== 0, //highlights if it matches the entered value
-            };
-
-      return newBoard;
-    });
-  }
-
-  //sets it back to last boardState
-  function undoLastMove() {
-    //does nothing if not more undo's in list
-
-    if (undoMoves.current.length === 0) return;
-    let lastBoardState = undoMoves.current.pop();
-
-    setBoard(lastBoardState);
-  }
-
-  //reset
-  function clearBoard() {
-    undoMoves.current = [];
-    setBoard(initialBoard);
-  }
-
   //initialize empty board - copy initalBoard's value contents (not object) into it and call sudoku solver
   function solveBoard() {
     let boardToSolve = [];
@@ -185,10 +185,10 @@ function App() {
     return boardToSolve;
   }
 
-  //to not allow further changes - setBoard to the solutionBoard by converting it to objects (everything fixed)
   function endGame() {
     setGameOn(false);
 
+    //to not allow further changes - setBoard to the solutionBoard by converting it to objects (everything fixed)
     let solutionBoardDisplay = solutionBoard.map((row) =>
       row.map((value) => ({
         value,
@@ -199,6 +199,20 @@ function App() {
       }))
     );
     setBoard(solutionBoardDisplay);
+  }
+
+  //eventHandler for undo button
+  //sets it back to last boardState
+  function undoLastMove() {
+    if (undoMoves.current.length === 0) return;
+    let lastBoardState = undoMoves.current.pop();
+    setBoard(lastBoardState);
+  }
+
+  //event handler for clear button. Resets the undo history and resets board
+  function clearBoard() {
+    undoMoves.current = [];
+    setBoard(initialBoard);
   }
 
   function toggleMode() {
@@ -216,65 +230,31 @@ function App() {
   return (
     <>
       {win && <Confetti></Confetti>}
-
-      <div className="settings-container">
-        <div className="slider-container">
-          <div className="flex-container">
-            <label>17</label>
-            <input
-              type="range"
-              min="17"
-              max="80"
-              className="slider"
-              value={difficulty}
-              onChange={handleSliderChange}
-            ></input>
-            <label>80</label>
-          </div>
-          <label>Starting Cells: {difficulty}</label>
-        </div>
-        <button className="button-create-board" onClick={startGame}>
-          Create New Board
-        </button>
-        <label className="switch-label">Easy Mode</label>
-        <ReactSwitch
-          className="switch"
-          checked={mode === "Easy"}
-          onChange={toggleMode}
-        ></ReactSwitch>
-      </div>
+      <Settings
+        difficulty={difficulty}
+        handleSliderChange={handleSliderChange}
+        startGame={startGame}
+        mode={mode}
+        toggleMode={toggleMode}
+      />
       {board !== undefined && (
         <Board
           board={board}
           handleChange={cellChanged}
           handleFocus={cellFocused}
           mode={mode}
-          notesSetting={notesSetting}
         ></Board>
       )}
       {gameOn && (
-        <div className="settings-container">
-          <button className="button-notes" onClick={toggleNotesSetting}>
-            Notes
-            {notesSetting && <div className="on-tooltip">ON</div>}
-          </button>
-          <button className="button-undo" onClick={undoLastMove}>
-            Undo
-          </button>
-          <button className="button-clear" onClick={clearBoard}>
-            Clear
-          </button>
-          <button className="button-solution" onClick={endGame}>
-            Show Solution
-          </button>
-        </div>
+        <Tools
+          toggleNotesSetting={toggleNotesSetting}
+          notesSetting={notesSetting}
+          undoLastMove={undoLastMove}
+          clearBoard={clearBoard}
+          endGame={endGame}
+        />
       )}
     </>
   );
 }
 export default App;
-
-//I think I way overcomplicated last move
-//I could've copied the entire state of the board and then just did set board...
-
-//im in trial
